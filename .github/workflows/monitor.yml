@@ -1,17 +1,11 @@
-name: ESO Monitoring with Playwright
+name: ESO Monitoring
 
 on:
   workflow_dispatch:
     inputs:
       ESO_ID:
-        description: 'ESO object ID'
+        description: 'ESO objektas (pvz. 7117366)'
         required: true
-        default: '362'
-  schedule:
-    - cron: '0 6 * * *'  # kasdien 06:00 UTC
-
-permissions:
-  contents: write
 
 jobs:
   check-eso:
@@ -20,25 +14,20 @@ jobs:
       ESO_ID: ${{ github.event.inputs.ESO_ID }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-        with:
-          persist-credentials: true
 
-      - name: Setup Node.js & Playwright
-        uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
-      - run: npm install playwright
-      - run: npx playwright install chromium
 
-      - name: Run monitor script
+      - name: Install Playwright
+        run: npm install playwright
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run monitoring script
         run: node monitor.js
-
-      - name: Commit snapshot if changed
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: 'Update ESO snapshot'
-          file_pattern: last.txt
