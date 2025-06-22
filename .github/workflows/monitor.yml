@@ -1,56 +1,50 @@
+# .github/workflows/monitor.yml
 name: ESO Monitoring
 
 on:
-  schedule:
-    - cron:  '0 6 * * *'
   workflow_dispatch:
-
-permissions:
-  contents: write
-
-env:
-  ESO_ID:             7117568
-  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-  TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+  schedule:
+    - cron: '0 6 * * *'  # Kiekvieną dieną 06:00 UTC (08:00 Lietuvos laiku)
 
 jobs:
   check-eso:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+    env:
+      ESO_ID: 362              # <-- čia tavo ESO objektas
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID:  ${{ secrets.TELEGRAM_CHAT_ID }}
 
-      - name: Download ESO page
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Download ESO result
         run: |
-          URL="https://www.eso.lt/web/namams/gamintojams/vartotojams/laisvos-galios-pasitikr..."${ESO_ID}
-          curl -s "$URL" > result.html
+          URL="https://www.eso.lt/web/namams/gaminantis-vartotojas/laisvos-galios-pasitikrinimas/${ESO_ID}"
+          curl -s "$URL" -o result.html
 
       - name: Extract status text
         run: |
+          # ištraukiam tik vidų tarp <div class="result-block"> … </div>
           grep -oP '(?<=<div class="result-block">)[\s\S]*?(?=</div>)' result.html \
-            | sed 's/<[^>]*>//g; s/^[ \t]*//; s/[ \t]*$//' \
+            | sed 's/<[^>]*>//g' \
+            | sed -e 's/^[[:space:]]*//' \
             > result.txt
 
-      - name: Compare with last snapshot
-        id: compare
+      - name: Compare and notify
         run: |
-          if [ -f last.txt ] && cmp -s result.txt last.txt; then
-            echo "changed=false" >> $GITHUB_OUTPUT
+          # jei nėra last.txt arba tekstas pasikeitė, siunčiam pranešimą
+          if [ ! -f last.txt ] || ! cmp -s result.txt last.txt; then
+            MSG=$(< result.txt)
+            curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              --data chat_id="$TELEGRAM_CHAT_ID" \
+              --data text="🔔 ESO statusas pasikeitė: $MSG"
           else
-            echo "changed=true"  >> $GITHUB_OUTPUT
-            mv result.txt last.txt
+            echo "No change – nieko nesiunčiam."
           fi
 
-      - name: Send Telegram alert
-        if: steps.compare.outputs.changed == 'true'
-        run: |
-          MSG=$(< last.txt)
-          curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="🔔 ESO statusas pasikeitė:\n${MSG}"
-
       - name: Commit new snapshot
-        if: steps.compare.outputs.changed == 'true'
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: Update ESO snapshot
-          file_pattern: last.txt
+          file_pattern: result.txt
