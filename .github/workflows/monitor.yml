@@ -1,21 +1,21 @@
 name: ESO Monitoring
 
-# rankiniu būdu paleidimui ir vėliau planuoto trigerio (pridėsim cron)
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 6 * * *'  # Kiekvieną dieną 06:00 UTC (08:00 Lietuvos laiku)
+    - cron: '0 6 * * *'  # kasdien 06:00 UTC (08:00 Lietuvos laiku)
 
 jobs:
   check-eso:
     runs-on: ubuntu-latest
+
     env:
       ESO_ID: 71177586
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Download ESO result
@@ -25,21 +25,14 @@ jobs:
 
       - name: Compare and notify
         run: |
-          # jei yra prieš tai išsaugotas last.html, palyginam
+          # Jei egzistuoja paskutinis snapshot, palyginam
           if [ -f last.html ] && cmp -s last.html result.html; then
-            echo "No change – nieko nesiunčiam"
+            echo "No change – rezultatas tas pats"
           else
-            # jei pasikeitė arba pirmą kartą – atnaujinam last.html ir siunčiam telegram
+            # Jei pasikeitė (ar pirmas paleidimas), atnaujinam snapshot ir siunčiam Telegram
             mv result.html last.html
-            # parenkam tekstą tarp div.result-block
             MSG=$(sed -n 's/.*<div class="result-block">//; s!</div>.*!!; p' last.html | sed 's/<[^>]*>//g' | tr '\n' ' ')
             curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               --data chat_id="${TELEGRAM_CHAT_ID}" \
-              --data text="🔔 ESO statusas pasikeitė: $MSG"
+              --data-urlencode text="🔔 ESO statusas pasikeitė: ${MSG}"
           fi
-
-      - name: Commit snapshot if changed
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: 'Update ESO snapshot'
-          file_pattern: 'last.html'
