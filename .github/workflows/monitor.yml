@@ -1,21 +1,23 @@
-name: ESO galios tikrinimas
+name: ESO Monitoring
 
 on:
-  schedule:
-    - cron: '0 5 * * *'
   workflow_dispatch:
 
 jobs:
-  check-eso:
+  run-script:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Įdiegti Playwright
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
         run: |
-          pip install playwright requests
-          playwright install chromium
-      - name: Paleisti patikrinimą
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-   run: python ./monitor.py
+          pip install -r requirements.txt || true
+
+      - name: Run monitoring script
+        run: python monitor.py
