@@ -34,4 +34,3 @@ import fetch from 'node-fetch';
 
   process.exit(telegramRes.ok ? 0 : 1);
 })();
-
