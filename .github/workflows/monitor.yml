@@ -11,7 +11,7 @@ on:
     - cron: '0 6 * * *'  # kasdien 06:00 UTC
 
 permissions:
-  contents: write    # kad veiktų commit'us per GITHUB_TOKEN
+  contents: write    # reikalinga, kad GITHUB_TOKEN turėtų teisę daryti git commit’us
 
 jobs:
   check-eso:
@@ -25,7 +25,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
-          persist-credentials: true   # leidžia auto-commit naudoti GITHUB_TOKEN
+          persist-credentials: true
 
       - name: Download ESO result
         run: |
@@ -34,19 +34,27 @@ jobs:
 
       - name: Compare and notify
         run: |
-          if [ ! -f last.html ] || ! cmp -s result.html last.html; then
-            mv result.html last.html
-            MSG=$(sed -n 's/.*<div class="result-block">//; s#</div>.*##; p' last.html | tr '\n' ' ')
+          # Ištraukime tik vidų tarp <div class="result-block">…</div>
+          STATUS=$(grep -oP '(?<=<div class="result-block">)[\s\S]*?(?=</div>)' result.html \
+                   | tr '\n' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [ -z "$STATUS" ]; then
+            echo "::warning::Nepavyko išgauti ESO statuso – puslapis atsiuntė HTML be result-block."
+            exit 0
+          fi
+
+          # Jei nėra last.html arba pasikeitė – siųsti ir commit'inti
+          if [ ! -f last.txt ] || ! cmp -s <(printf '%s' "$STATUS") last.txt; then
+            printf '%s' "$STATUS" > last.txt
             curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               --data chat_id="${TELEGRAM_CHAT_ID}" \
-              --data text="🔔 ESO statusas pasikeitė: $MSG"
+              --data text="🔔 ESO statusas pasikeitė: $STATUS"
           else
-            echo "No change – nieko nesiunčiam"
+            echo "No change – nieko nesiunčiam."
           fi
 
       - name: Commit snapshot if changed
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: 'Update ESO snapshot'
-          file_pattern: last.html
+          file_pattern: last.txt
           github_token: ${{ secrets.GITHUB_TOKEN }}
