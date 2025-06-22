@@ -1,6 +1,5 @@
 name: ESO Monitoring
 
-# rankinis paleidimas + kasdien 06:00 UTC
 on:
   workflow_dispatch:
     inputs:
@@ -9,7 +8,10 @@ on:
         required: true
         default: '362'
   schedule:
-    - cron: '0 6 * * *'  # kasdien 06:00 UTC (08:00 Lietuvos laiku)
+    - cron: '0 6 * * *'  # kasdien 06:00 UTC
+
+permissions:
+  contents: write    # kad veiktų commit'us per GITHUB_TOKEN
 
 jobs:
   check-eso:
@@ -22,16 +24,17 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          persist-credentials: true   # leidžia auto-commit naudoti GITHUB_TOKEN
 
       - name: Download ESO result
         run: |
-          curl -s "https://www.eso.lt/web/namams/gaminantis-vartotojas/laisvos-galios-pasitikrinimas/${ESO_ID}" > result.html
+          curl -s "https://www.eso.lt/web/namams/gaminantis-vartotojas/laisvos-galios-pasitikrinimas/${ESO_ID}" \
+            > result.html
 
       - name: Compare and notify
         run: |
-          # jeigu dar nėra senos nuotraukos, arba ji skiriasi nuo naujos
           if [ ! -f last.html ] || ! cmp -s result.html last.html; then
-            # atnaujinam snapshot ir siunčiam Telegram žinutę
             mv result.html last.html
             MSG=$(sed -n 's/.*<div class="result-block">//; s#</div>.*##; p' last.html | tr '\n' ' ')
             curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
@@ -46,3 +49,4 @@ jobs:
         with:
           commit_message: 'Update ESO snapshot'
           file_pattern: last.html
+          github_token: ${{ secrets.GITHUB_TOKEN }}
