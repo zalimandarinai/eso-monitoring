@@ -1,0 +1,10 @@
+// package.json
+{
+  "name": "eso-monitor",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "playwright": "^1.38.0",
+    "node-fetch": "^3.4.0"
+  }
+}
