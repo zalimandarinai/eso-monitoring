@@ -1,26 +1,37 @@
- name: ESO Monitoring
+name: ESO Monitoring
 
 on:
   workflow_dispatch:
 
 jobs:
-  run-script:
+  check-eso:
     runs-on: ubuntu-latest
 
+    env:
+      ESO_ID: 71177586
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install Playwright
+      - name: Check ESO page via curl
         run: |
-          python -m pip install --upgrade pip
-          pip install playwright
-          playwright install chromium
-
-      - name: Run monitoring script
-        run: python monitor.py
+          URL="https://www.eso.lt/web/namams/gaminantis-vartotojas/laisvos-galios-pasitikrinimas/362?objectCode=$ESO_ID"
+          # Parsisiunčiame HTML
+          curl -s "$URL" > current.html
+          # Palyginame su vakar dienos rezultatu
+          if [ -f last.html ] && cmp -s last.html current.html; then
+            echo "No change"
+          else
+            mv current.html last.html
+            # Iš kurių eilučių traukiam tekstą (jei norite, keiskit pagal poreikį)
+            MSG=$(grep -A1 '<div class="result-block">' last.html | sed -e 's/<[^>]*>//g' | tr -d '\r\n')
+            curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=$(echo "$MSG" | jq -sRr @uri)"
+          fi
+      - name: Commit updated last.html
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: 'Update ESO snapshot'
+          file_pattern: 'last.html'
