@@ -1,4 +1,4 @@
-name: ESO Monitoring
+ name: ESO Monitoring
 
 on:
   workflow_dispatch:
@@ -24,4 +24,3 @@ jobs:
 
       - name: Run monitoring script
         run: python monitor.py
-
