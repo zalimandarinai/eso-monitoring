@@ -1,6 +1,10 @@
 name: ESO Monitoring (Python)
 
 on:
+  # 1) Periodinis paleidimas kas valandą
+  schedule:
+    - cron: '0 * * * *'
+  # 2) Rankinis paleidimas per GitHub UI
   workflow_dispatch:
     inputs:
       ESO_ID:
@@ -11,18 +15,15 @@ jobs:
   check-eso:
     runs-on: ubuntu-latest
     env:
-      # Persiunčiame į skriptą
+      # Pagrindiniai kintamieji
       ESO_ID:             ${{ github.event.inputs.ESO_ID }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
-      # Naudojame tą patį URL diagnostikai
-      URL: >
-        https://www.eso.lt/web/namams/gaminantis-vartotojas/
-        laisvos-galios-patitikrinimas/${{ github.event.inputs.ESO_ID }}
-        ?objectCode=${{ github.event.inputs.ESO_ID }}
+      # Jei reikia kitą raktažodį, pakeisk čia arba kaip secret
+      POSITIVE_KEYWORD:   'taip'
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Setup Python 3.11
@@ -30,15 +31,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Check ESO URL reachable
-        run: |
-          echo "DEBUG ▶️ Pinging $URL"
-          curl -Is "$URL" -m 20 | head -n1
-
-      - name: Run Python monitor
+      - name: Run ESO monitor
         run: python monitor.py
