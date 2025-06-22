@@ -1,8 +1,13 @@
 {
   "name": "eso-monitor",
   "version": "1.0.0",
+  "description": "Simple ESO free‐power checker",
   "type": "module",
-  "dependencies": {
-    "playwright": "^1.38.0"
+  "main": "monitor.js",
+  "scripts": {
+    "start": "node monitor.js"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
