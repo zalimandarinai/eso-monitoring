@@ -1,41 +1,26 @@
-// monitor.js
-// 1) Tiesioginė HTTP GET užklausa be Playwright
-// 2) Naudoja globalų fetch (Node 18+)
-// 3) Regex ištraukia tik <div class="result-block">
+name: ESO Monitoring
 
-const ESO_ID      = process.env.ESO_ID;
-const BOT_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID     = process.env.TELEGRAM_CHAT_ID;
-const URL         = `https://www.eso.lt/web/namams/gaminantis-vartotojas/laisvos-galios-pasitikrinimas/362?objectCode=${ESO_ID}`;
-const UA          = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36';
+on:
+  schedule:
+    - cron: '0 6 * * *'      # kasdien 06:00 UTC (08:00 Lietuvos laiku)
+  workflow_dispatch:         # leidžia paleisti ranka iš Actions UI
 
-(async () => {
-  try {
-    // 1) Parsisiunčiam HTML
-    const res = await fetch(URL, { headers: { 'User-Agent': UA } });
-    const html = await res.text();
+jobs:
+  check-eso:
+    runs-on: ubuntu-latest
+    env:
+      ESO_ID:             71177586
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
 
-    // 2) Ištraukiam „result-block“:
-    const m = html.match(/<div\s+class="result-block">([\s\S]*?)<\/div>/i);
-    const text = m
-      ? m[1].replace(/<[^>]+>/g, '').trim()
-      : '⚠️ Neradau „result-block“ elemento.';
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    // 3) Siunčiam į Telegram
-    const tg = await fetch(
-      `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          chat_id: CHAT_ID,
-          text:    `🔔 ESO statusas pasikeitė:\n${text}`
-        })
-      }
-    );
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
 
-    process.exit(tg.ok ? 0 : 1);
-  } catch (err) {
-    console.error(err);
-    process.exit(1);
-  }
-})();
+      - name: Run monitoring script
+        run: node monitor.js
