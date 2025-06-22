@@ -25,14 +25,22 @@ jobs:
 
       - name: Compare and notify
         run: |
-          # Jei egzistuoja paskutinis snapshot, palyginam
+          # Palyginame su paskutine versija, jei nesikeite – išeiname
           if [ -f last.html ] && cmp -s last.html result.html; then
             echo "No change – rezultatas tas pats"
-          else
-            # Jei pasikeitė (ar pirmas paleidimas), atnaujinam snapshot ir siunčiam Telegram
-            mv result.html last.html
-            MSG=$(sed -n 's/.*<div class="result-block">//; s!</div>.*!!; p' last.html | sed 's/<[^>]*>//g' | tr '\n' ' ')
-            curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-              --data chat_id="${TELEGRAM_CHAT_ID}" \
-              --data-urlencode text="🔔 ESO statusas pasikeitė: ${MSG}"
+            exit 0
           fi
+
+          # Atnaujiname snapshot
+          mv result.html last.html
+
+          # Ištraukiame tik tekstą tarp <div class="result-block">…</div>
+          MSG=$(grep -oP '(?<=<div class="result-block">).+?(?=</div>)' last.html \
+            | sed 's/<[^>]*>//g' \
+            | tr -d '\n')
+
+          # Siunčiame į Telegram
+          curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data chat_id="${TELEGRAM_CHAT_ID}" \
+            --data-urlencode text="🔔 ESO statusas pasikeitė: ${MSG}"
+
