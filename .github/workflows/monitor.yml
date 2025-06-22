@@ -1,12 +1,10 @@
 name: ESO Monitoring
 
-# Paleidžiam kasdien 06:00 UTC (08:00 Lietuvos laiku) ir rankiniu būdu
 on:
   schedule:
     - cron:  '0 6 * * *'
   workflow_dispatch:
 
-# Suteikiam workflow teisę rašyti repo (tam, kad auto-commit veiktų)
 permissions:
   contents: write
 
@@ -18,10 +16,8 @@ env:
 jobs:
   check-eso:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Download ESO page
         run: |
@@ -30,18 +26,17 @@ jobs:
 
       - name: Extract status text
         run: |
-          sed -n '/<div class="result-block">/,/<\/div>/p' result.html \
-            | sed 's/<[^>]*>//g' \
-            | tr -d '\r' \
+          grep -oP '(?<=<div class="result-block">)[\s\S]*?(?=</div>)' result.html \
+            | sed 's/<[^>]*>//g; s/^[ \t]*//; s/[ \t]*$//' \
             > result.txt
 
       - name: Compare with last snapshot
         id: compare
         run: |
           if [ -f last.txt ] && cmp -s result.txt last.txt; then
-            echo "::set-output name=changed::false"
+            echo "changed=false" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=changed::true"
+            echo "changed=true"  >> $GITHUB_OUTPUT
             mv result.txt last.txt
           fi
 
