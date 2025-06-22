@@ -1,37 +1,60 @@
 name: ESO Monitoring
 
+# Paleidžiam kasdien 06:00 UTC (08:00 Lietuvos laiku) ir rankiniu būdu (workflow_dispatch)
 on:
   schedule:
-    - cron: '0 6 * * *'      # kasdien 06:00 UTC (08:00 Lietuvos laiku)
-  workflow_dispatch:         # leidžia paleisti ranka
+    - cron:  '0 6 * * *'
+  workflow_dispatch:
+
+env:
+  # Tavo ESO objekto ID
+  ESO_ID:     7117568
+  # Į Settings → Secrets and variables → Actions įrašyti secrets:
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
 
 jobs:
   check-eso:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          persist-credentials: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Install dependencies
+      - name: Download ESO page
         run: |
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          URL="https://www.eso.lt/web/namams/gamintojams/vartotojams/laisvos-galios-pasitikr..."${ESO_ID}
+          curl -s "$URL" > result.html
 
-      - name: Run monitoring script
-        run: python monitor.py
+      - name: Extract status text
+        run: |
+          # iškerpam <div class="result-block">…</div>, pašalinam HTML tag’us
+          sed -n '/<div class="result-block">/,/<\/div>/p' result.html \
+            | sed 's/<[^>]*>//g' \
+            | tr -d '\r' \
+            > result.txt
 
-      - name: Commit snapshot if changed
-        uses: EndBug/add-and-commit@v9
+      - name: Compare with last snapshot
+        id: compare
+        run: |
+          if [ -f last.txt ] && cmp -s result.txt last.txt; then
+            echo "::set-output name=changed::false"
+          else
+            echo "::set-output name=changed::true"
+            mv result.txt last.txt
+          fi
+
+      - name: Send Telegram alert
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          MSG=$(< last.txt)
+          curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="🔔 ESO statusas pasikeitė:\n${MSG}"
+
+      - name: Commit new snapshot
+        if: steps.compare.outputs.changed == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          author_name: github-actions
-          author_email: actions@github.com
-          message: "Update ESO snapshot"
-          add: "last.html"
+          commit_message: Update ESO snapshot
+          file_pattern: last.txt
