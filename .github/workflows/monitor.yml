@@ -11,7 +11,7 @@ on:
     - cron: '0 6 * * *'  # kasdien 06:00 UTC
 
 permissions:
-  contents: write    # reikalinga, kad GITHUB_TOKEN turėtų teisę daryti git commit’us
+  contents: write
 
 jobs:
   check-eso:
@@ -34,22 +34,25 @@ jobs:
 
       - name: Compare and notify
         run: |
-          # Ištraukime tik vidų tarp <div class="result-block">…</div>
+          # Ištraukime tik vidų tarp <div class="result-block">…</div>, tada pašalinkime visas žymes:
           STATUS=$(grep -oP '(?<=<div class="result-block">)[\s\S]*?(?=</div>)' result.html \
-                   | tr '\n' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                   | sed -e 's/<[^>]*>//g' \
+                   | tr '\n' ' ' \
+                   | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
           if [ -z "$STATUS" ]; then
             echo "::warning::Nepavyko išgauti ESO statuso – puslapis atsiuntė HTML be result-block."
             exit 0
           fi
 
-          # Jei nėra last.html arba pasikeitė – siųsti ir commit'inti
+          # Jei pasikeitė arba nėra seno, siųsti ir atnaujinti snapshot’ą
           if [ ! -f last.txt ] || ! cmp -s <(printf '%s' "$STATUS") last.txt; then
             printf '%s' "$STATUS" > last.txt
             curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               --data chat_id="${TELEGRAM_CHAT_ID}" \
               --data text="🔔 ESO statusas pasikeitė: $STATUS"
           else
-            echo "No change – nieko nesiunčiam."
+            echo "No change – nieko nesiunčiame."
           fi
 
       - name: Commit snapshot if changed
