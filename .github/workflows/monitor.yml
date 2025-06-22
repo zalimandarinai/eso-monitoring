@@ -1,15 +1,17 @@
 name: ESO Monitoring
 
-# Paleidžiam kasdien 06:00 UTC (08:00 Lietuvos laiku) ir rankiniu būdu (workflow_dispatch)
+# Paleidžiam kasdien 06:00 UTC (08:00 Lietuvos laiku) ir rankiniu būdu
 on:
   schedule:
     - cron:  '0 6 * * *'
   workflow_dispatch:
 
+# Suteikiam workflow teisę rašyti repo (tam, kad auto-commit veiktų)
+permissions:
+  contents: write
+
 env:
-  # Tavo ESO objekto ID
-  ESO_ID:     7117568
-  # Į Settings → Secrets and variables → Actions įrašyti secrets:
+  ESO_ID:             7117568
   TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
   TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
 
@@ -28,7 +30,6 @@ jobs:
 
       - name: Extract status text
         run: |
-          # iškerpam <div class="result-block">…</div>, pašalinam HTML tag’us
           sed -n '/<div class="result-block">/,/<\/div>/p' result.html \
             | sed 's/<[^>]*>//g' \
             | tr -d '\r' \
