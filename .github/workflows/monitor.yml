@@ -1,4 +1,4 @@
-name: ESO Monitoring
+name: ESO Monitoring with Playwright
 
 on:
   workflow_dispatch:
@@ -27,37 +27,18 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Download ESO result
-        run: |
-          curl -s "https://www.eso.lt/web/namams/gaminantis-vartotojas/laisvos-galios-pasitikrinimas/${ESO_ID}" \
-            > result.html
+      - name: Setup Node.js & Playwright
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: npm install playwright
+      - run: npx playwright install chromium
 
-      - name: Compare and notify
-        run: |
-          # Ištraukime tik vidų tarp <div class="result-block">…</div>, tada pašalinkime visas žymes:
-          STATUS=$(grep -oP '(?<=<div class="result-block">)[\s\S]*?(?=</div>)' result.html \
-                   | sed -e 's/<[^>]*>//g' \
-                   | tr '\n' ' ' \
-                   | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-          if [ -z "$STATUS" ]; then
-            echo "::warning::Nepavyko išgauti ESO statuso – puslapis atsiuntė HTML be result-block."
-            exit 0
-          fi
-
-          # Jei pasikeitė arba nėra seno, siųsti ir atnaujinti snapshot’ą
-          if [ ! -f last.txt ] || ! cmp -s <(printf '%s' "$STATUS") last.txt; then
-            printf '%s' "$STATUS" > last.txt
-            curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-              --data chat_id="${TELEGRAM_CHAT_ID}" \
-              --data text="🔔 ESO statusas pasikeitė: $STATUS"
-          else
-            echo "No change – nieko nesiunčiame."
-          fi
+      - name: Run monitor script
+        run: node monitor.js
 
       - name: Commit snapshot if changed
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: 'Update ESO snapshot'
           file_pattern: last.txt
-          github_token: ${{ secrets.GITHUB_TOKEN }}
