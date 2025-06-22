@@ -1,35 +1,51 @@
-import asyncio
-from playwright.async_api import async_playwright
 import os
 import requests
+from bs4 import BeautifulSoup
 
-ESO_OBJECT_ID = "71177586"
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+# Konfigūruok per GitHub Secrets
+ESO_ID    = os.environ["ESO_ID"]
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-LAST_RESULT_FILE = "last_result.txt"
+CHAT_ID   = os.environ["TELEGRAM_CHAT_ID"]
 
-async def check():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch()
-        page = await browser.new_page()
-        await page.goto("https://www.eso.lt/web/namams/gaminantis-vartotojas/laisvos-galios-pasitikrinimas/362")
-        await page.fill("input[name='objectCode']", ESO_OBJECT_ID)
-        await page.click("button:has-text('Tikrinti')")
-        await page.wait_for_selector("div.result-block", timeout=10000)
-        result = await page.inner_text("div.result-block")
-        previous = ""
-        if os.path.exists(LAST_RESULT_FILE):
-            with open(LAST_RESULT_FILE, "r", encoding="utf-8") as f:
-                previous = f.read().strip()
-        if result.strip() != previous:
-            send_telegram(f"🔔 ESO rezultatas pasikeitė!\n\n{result.strip()}")
-            with open(LAST_RESULT_FILE, "w", encoding="utf-8") as f:
-                f.write(result.strip())
-        await browser.close()
+URL       = f"https://www.eso.lt/web/namams/gaminantis-vartotojas/laisvos-galios-patitikrinimas/{ESO_ID}?objectCode={ESO_ID}"
+SNAPSHOT  = "last.html"
 
-def send_telegram(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": message}
-    requests.post(url, data=data)
+def fetch_html():
+    r = requests.get(URL, timeout=30)
+    r.raise_for_status()
+    return r.text
 
-asyncio.run(check())
+def extract_text(html):
+    soup = BeautifulSoup(html, "html.parser")
+    div = soup.find("div", class_="result-block")
+    return div.get_text(strip=True) if div else html.strip()
+
+def load_last():
+    if os.path.exists(SNAPSHOT):
+        return open(SNAPSHOT, encoding="utf-8").read()
+    return None
+
+def save_last(html):
+    with open(SNAPSHOT, "w", encoding="utf-8") as f:
+        f.write(html)
+
+def send_telegram(msg):
+    resp = requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        data={"chat_id": CHAT_ID, "text": msg}
+    )
+    resp.raise_for_status()
+
+def main():
+    html     = fetch_html()
+    current  = extract_text(html)
+    previous = extract_text(load_last()) if load_last() else None
+
+    if current != previous:
+        send_telegram(f"🔔 ESO atnaujino statusą:\n{current}")
+        save_last(html)
+    else:
+        print("🔍 Naujienų nėra; statusas nepasikeitė.")
+
+if __name__ == "__main__":
+    main()
