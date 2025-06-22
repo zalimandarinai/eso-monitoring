@@ -1,4 +1,4 @@
-name: ESO Monitoring
+name: ESO Monitoring with Playwright
 
 on:
   workflow_dispatch:
@@ -8,39 +8,22 @@ on:
 jobs:
   check-eso:
     runs-on: ubuntu-latest
-
     env:
       ESO_ID: 71177586
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Download ESO result
-        run: |
-          URL="https://www.eso.lt/web/namams/gaminantis-vartotojas/laisvos-galios-pasitikrinimas/362?objectCode=$ESO_ID"
-          curl -s "$URL" > result.html
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
 
-      - name: Compare and notify
-        run: |
-          # Palyginame su paskutine versija, jei nesikeite – išeiname
-          if [ -f last.html ] && cmp -s last.html result.html; then
-            echo "No change – rezultatas tas pats"
-            exit 0
-          fi
+      - name: Install dependencies
+        run: npm ci
 
-          # Atnaujiname snapshot
-          mv result.html last.html
-
-          # Ištraukiame tik tekstą tarp <div class="result-block">…</div>
-          MSG=$(grep -oP '(?<=<div class="result-block">).+?(?=</div>)' last.html \
-            | sed 's/<[^>]*>//g' \
-            | tr -d '\n')
-
-          # Siunčiame į Telegram
-          curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data chat_id="${TELEGRAM_CHAT_ID}" \
-            --data-urlencode text="🔔 ESO statusas pasikeitė: ${MSG}"
-
+      - name: Run monitoring script
+        run: node monitor.js
